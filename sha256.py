@@ -104,9 +104,6 @@ def mutate(data, digest):
     # defined in Sec. 4.1.2 and Sec. 4.2.2, respectively.
     # Addition (+) is performed modulo 232.
 
-    def transform_0_until_16(i):
-        return
-
     # Prepare the message schedule, {Wt}:
     w = []
     for i in range(0, 16):
