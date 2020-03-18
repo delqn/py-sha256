@@ -222,7 +222,7 @@ def compression_function(previous_hash, new_block):
     assert isinstance(new_block, bytes)
     assert len(new_block) == BLOCK_SIZE
 
-    new_hash = mutate(new_block, digest)
+    new_hash = digest_to_hex(mutate(new_block, digest))
     return new_hash
 
 
@@ -233,7 +233,7 @@ def sha256(m):
     prev_hash = digest_to_hex(INITIAL_HASH)
 
     for block in blocks:
-        prev_hash = digest_to_hex(compression_function(prev_hash, block))
+        prev_hash = compression_function(prev_hash, block)
     return prev_hash
 
 
