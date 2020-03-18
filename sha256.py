@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from binascii import unhexlify
 """
 Symbols and Operations
     The following symbols are used in the secure hash algorithm specifications; each operates on w-bit words:
@@ -129,76 +130,111 @@ def mutate(data, digest):
         digest_copy[d_position] = (d + t1) & 0xffffffff
         digest_copy[h_position] = (t1 + t2) & 0xffffffff
 
-    return [(x + digest_copy[idx]) & 0xffffffff for idx, x in enumerate(digest)]
+    return [(x + digest_copy[idx]) & 0xffffffff
+            for idx, x in enumerate(digest)]
 
 
-def get_buffer(s):
-    if isinstance(s, str):
-        return s.encode('utf-8')
-    return memoryview(s)
+def digest_to_hex(digest):
+    # tansforms a list of integers into one hex string
+    # example
+    # [0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19] into
+    # 6A09E667BB67AE853C6EF372A54FF53A510E527F9B05688C1F83D9AB5BE0CD19
+    out = ''
+    for i in digest:
+        r = hex(i)[2:]
+        l = len(r)
+        if l < 8:
+            # append zeroes to make the string always of length 8
+            r = ('0' * (8 - l)) + r
+        out += r
+    return out
 
 
-def zeros(count):
-    return [0] * count
+def get_extra_empty_block(length, add_one_at_the_start=False):
+    # returns an empty block with all zeroes except for the last 64 bit
+    # the last 64 bit will encode the length of the whole message being hashed
+    length = length * 8
+    block = b''
+    if (add_one_at_the_start):
+        block += unhexlify(b'80')
+        zeroes_to_add = 63 - 8
+    else:
+        zeroes_to_add = 64 - 8
+
+    zeroes_bytes = block + bytes([0 for i in range(0, zeroes_to_add)])
+    block = zeroes_bytes + length.to_bytes(8, 'big')
+    assert len(block) == 64
+    return block
 
 
-class SHA256(object):
-    def __init__(self, string=None):
-        self._sha = {
-            'digest': INITIAL_HASH,
-            'count_lo': 0,
-            'count_hi': 0,
-            'data': zeros(BLOCK_SIZE),
-        }
-        if not string:
-            return
+def pad_last_block(last_block, total_length_message):
+    # pads the last block with appropriate padding, adds the +1 automatically
+    # we assume that the block being passed has enough space to add the 8 bytes
+    # required for the length and the 1 byte extra
 
-        buff = get_buffer(string)
-        count = len(buff)
-        count_lo = (self._sha['count_lo'] + (count << 3)) & 0xffffffff
-        if count_lo < self._sha['count_lo']:
-            self._sha['count_hi'] += 1
-        self._sha['count_lo'] = count_lo
-        self._sha['count_hi'] += (count >> 29)
+    assert len(last_block) < 56
+    total_length_message = total_length_message * 8
+    # we want to add one bit followed by 7 zeroes the byte b'80' does that for us
+    last_block += unhexlify(b'80')
+    # make room for the length at the end, it has size 8 bytes (64 bits)
+    bytes_to_add = 64 - (len(last_block) + 8)
+    # add enough zeroes
+    last_block += bytes([0 for i in range(0, bytes_to_add)])
+    last_block += total_length_message.to_bytes(8, 'big')
+    assert len(last_block) == 64
+    return last_block
 
-        buffer_idx = 0
-        while count >= BLOCK_SIZE:
-            self._sha['data'] = [c for c in buff[buffer_idx:buffer_idx + BLOCK_SIZE]]
-            count -= BLOCK_SIZE
-            buffer_idx += BLOCK_SIZE
-            self._sha['digest'] = mutate(self._sha['data'], self._sha['digest'])
 
-        self._sha['data'][:count] = [c for c in buff[buffer_idx:buffer_idx + count]]
+def pad_message(message, length=None):
+    # given a message in bytes. Pads the last block according to the docs of 
+    # sha256, returns a list of blocks where the last blocks are padded 
+    # correctly
+    assert isinstance(message, bytes)
+    assert len(message) > 0
 
-    def hexdigest(self):
-        """
-        A hex digit is an element of the set {0, 1,…, 9, a,…, f}.
-        A hex digit is the representation of a 4-bit string. For example, the hex digit “7” represents
-        the 4-bit string “0111”, and the hex digit “a” represents the 4-bit string “1010”.
-        """
-        hash = self._sha.copy()
-        count = (hash['count_lo'] >> 3) & 0x3f
-        hash['data'][count] = 0x80
-        count += 1
-        if count > BLOCK_SIZE - 8:
-            # fill with zero bytes after the count
-            hash['data'] = hash['data'][:count] + zeros(BLOCK_SIZE - count)
-            hash['digest'] = mutate(hash['data'], hash['digest'])
-            # fill with zero bytes
-            hash['data'] = [0] * BLOCK_SIZE
-        else:
-            hash['data'] = hash['data'][:count] + zeros(BLOCK_SIZE - count)
+    if not length:
+        length = len(message)
 
-        for idx, shift in zip(range(56, 64), list(range(24, -1, -8)) * 2):
-            hash['data'][idx] = (hash['count_hi' if idx < 60 else 'count_lo'] >> shift) & 0xff
+    blocks = [message[i: i + 64]
+              for i in range(0, len(message), BLOCK_SIZE)]
 
-        hash['digest'] = mutate(hash['data'], hash['digest'])
+    last_block = blocks[-1]
+    if (len(last_block) < 56):
+        last_block = pad_last_block(last_block, length)
+        assert len(last_block) == 64
+        return blocks[:len(blocks) - 1] + [last_block]
+    else:
+        if(len(last_block) == 64):
+            return blocks + [get_extra_empty_block(length, True)]
 
-        digest = []
-        for i in hash['digest']:
-            for shift in range(24, -1, -8):
-                digest.append((i >> shift) & 0xff)
-        return ''.join(['%.2x' % i for i in digest[:DIGEST_SIZE]])
+        last_block += unhexlify(b'80')
+        zeroes_bytes_to_add = 64 - (len(last_block))
+        last_block += bytes([0 for i in range(0, zeroes_bytes_to_add)])
+        assert len(last_block) == 64
+        return blocks[:len(blocks) - 1] +\
+                     [last_block, get_extra_empty_block(length)]
+
+
+def compression_function(previous_hash, new_block):
+    # compression function used in merkle damgard
+    digest = [int(previous_hash[i: i + 8], 16)
+              for i in range(0, len(previous_hash), 8)]
+    assert isinstance(new_block, bytes)
+    assert len(new_block) == BLOCK_SIZE
+
+    new_hash = mutate(new_block, digest)
+    return new_hash
+
+
+def sha256(m):
+    # merke-damgard construction
+    assert isinstance(m, bytes)
+    blocks = pad_message(m)
+    prev_hash = digest_to_hex(INITIAL_HASH)
+
+    for block in blocks:
+        prev_hash = digest_to_hex(compression_function(prev_hash, block))
+    return prev_hash
 
 
 def test():
@@ -208,16 +244,7 @@ def test():
     for i in range(0, 1000):
         random_string_function = lambda x: ''.join([random.choice(string.printable) for i in range(random.randint(1, x))])
         rnd = random_string_function(random.randint(1, 100))
-        assert hashlib.sha256(rnd.encode()).hexdigest() == SHA256(rnd).hexdigest() 
-    string = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
-    assert 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' == SHA256().hexdigest()
-    assert 'a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433' == SHA256(string).hexdigest()
-    assert 'db7b94909697ac91e9f167159b99a1d2612b5cf4b3086a72cb6ac0206c4bd47c' == SHA256(string * 7).hexdigest()
-    assert '1aa4458852eefd69560827a035db9df11491abdae3483a71d1707f05e085e682' == SHA256('hello⊕'.encode('utf-8')).hexdigest()
-    long_text = string * 999
-    assert '5e4e5fcc4c89b7b1b6567d81187e83c99cd7c04ca77a093ed74e35a08046d519' == SHA256(long_text).hexdigest()
-    print ('ok')
-
+        assert hashlib.sha256(rnd.encode()).hexdigest() == sha256(rnd.encode())
 
 if __name__ == "__main__":
     test()
