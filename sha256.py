@@ -118,12 +118,12 @@ def mutate(data, digest):
         sum_ = gamma1(w[i - 2]) + w[i - 7] + gamma0(w[i - 15]) + w[i - 16]
         w.append(sum_ & 0xffffffff)
 
-    for idx in xrange(0, -64, -1):
+    for idx in range(0, -64, -1):
         i = abs(idx % 8)
 
         # Initialize the eight working variables, a, b, c, d, e, f, g, and h  with the (i-1)st hash value.
         # W is the prepared message schedule.
-        positions = [(i + x) % 8 for x in xrange(8)]
+        positions = [(i + x) % 8 for x in range(8)]
         d_position = positions[3]
         h_position = positions[-1]
         a, b, c, d, e, f, g, h = [digest_copy[pos] for pos in positions]
@@ -197,14 +197,14 @@ class SHA256(object):
         else:
             hash['data'] = hash['data'][:count] + zeros(BLOCK_SIZE - count)
 
-        for idx, shift in zip(range(56, 64), range(24, -1, -8) * 2):
+        for idx, shift in zip(list(range(56, 64)), list(range(24, -1, -8)) * 2):
             hash['data'][idx] = (hash['count_hi' if idx < 60 else 'count_lo'] >> shift) & 0xff
 
         hash['digest'] = mutate(hash['data'], hash['digest'])
 
         digest = []
         for i in hash['digest']:
-            for shift in xrange(24, -1, -8):
+            for shift in range(24, -1, -8):
                 digest.append((i >> shift) & 0xff)
         return ''.join(['%.2x' % i for i in digest[:DIGEST_SIZE]])
 
@@ -218,7 +218,7 @@ def test():
     long_text = string * 999
     assert '5e4e5fcc4c89b7b1b6567d81187e83c99cd7c04ca77a093ed74e35a08046d519' == SHA256(long_text).hexdigest()
     assert 'c7ae9b6438e9dfccfd486fabed3c08d6f63ae559ef09b2fe084a38dbc46fae7c' == SHA256(u'\uE52D').hexdigest()
-    print 'ok'
+    print('ok')
 
 
 if __name__ == "__main__":
