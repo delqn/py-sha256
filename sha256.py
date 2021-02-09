@@ -218,7 +218,7 @@ def test():
     long_text = string * 999
     assert '5e4e5fcc4c89b7b1b6567d81187e83c99cd7c04ca77a093ed74e35a08046d519' == SHA256(long_text).hexdigest()
     assert 'c7ae9b6438e9dfccfd486fabed3c08d6f63ae559ef09b2fe084a38dbc46fae7c' == SHA256(u'\uE52D').hexdigest()
-    print 'ok'
+    print('ok')
 
 
 if __name__ == "__main__":
