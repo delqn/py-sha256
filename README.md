@@ -1,4 +1,4 @@
-## Experimental python implementation of SHA256
+## Experimental python3 implementation of SHA256
 
 
 This Python implementation of the SHA256 follows the official publication http://csrc.nist.gov/publications/fips/fips180-4/fips-180-4.pdf
