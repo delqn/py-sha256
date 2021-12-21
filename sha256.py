@@ -94,7 +94,11 @@ def gamma1(x):
     return rotate_right(x, 17) ^ rotate_right(x, 19) ^ shift_right(x, 10)
 
 
-def mutate(data, digest):
+def compression_function(data, digest):
+    # compression function used in merkle damgard
+    assert isinstance(data, bytes)
+    assert len(data) == BLOCK_SIZE
+
     digest_copy = digest[:]
 
     # 6.2.2:  The SHA-256 hash computation uses functions and constants previously
@@ -215,26 +219,15 @@ def pad_message(message, length=None):
                      [last_block, get_extra_empty_block(length)]
 
 
-def compression_function(previous_hash, new_block):
-    # compression function used in merkle damgard
-    digest = [int(previous_hash[i: i + 8], 16)
-              for i in range(0, len(previous_hash), 8)]
-    assert isinstance(new_block, bytes)
-    assert len(new_block) == BLOCK_SIZE
-
-    new_hash = digest_to_hex(mutate(new_block, digest))
-    return new_hash
-
-
 def sha256(m):
     # merke-damgard construction
     assert isinstance(m, bytes)
     blocks = pad_message(m)
-    prev_hash = digest_to_hex(INITIAL_HASH)
+    prev_hash = INITIAL_HASH
 
     for block in blocks:
-        prev_hash = compression_function(prev_hash, block)
-    return prev_hash
+        prev_hash = compression_function(block, prev_hash)
+    return digest_to_hex(prev_hash)
 
 
 def test():
